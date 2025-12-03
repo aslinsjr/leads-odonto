@@ -5,6 +5,14 @@ let pageSize = 25;
 let sortColumn = '';
 let sortDirection = 'asc';
 
+// Filtros ativos por estatística
+let activeStatFilters = {
+    specialty: false,
+    location: false,
+    whatsapp: false,
+    email: false
+};
+
 // Configuração de colunas
 const columns = [
     { id: 'ID_Insta', label: 'ID Instagram', visible: false, width: '120px' },
@@ -15,10 +23,10 @@ const columns = [
     { id: 'Telefone', label: 'Telefone', visible: true, width: '140px' },
     { id: 'Telefones_Bio', label: 'Outros Telefones', visible: true, width: '160px' },
     { id: 'e-mail', label: 'E-mail', visible: false, width: '200px' },
-    { id: 'Email_Bio', label: 'Email', visible: true, width: '180px' },
+    { id: 'Email_Bio', label: 'E-mail Bio', visible: true, width: '180px' },
     { id: 'Endereco', label: 'Endereço', visible: true, width: '200px' },
     { id: 'Tem_WhatsApp', label: 'WhatsApp', visible: true, width: '100px' },
-    { id: 'Bio', label: 'Bio', visible: false, width: '300px' },
+    { id: 'Bio', label: 'Bio', visible: true, width: '300px' },
     { id: 'Link-Bio', label: 'Link Bio', visible: false, width: '80px' },
     { id: 'Local', label: 'Local', visible: false, width: '150px' },
     { id: 'Idioma', label: 'Idioma', visible: false, width: '100px' },
@@ -44,11 +52,11 @@ async function loadLeadsData() {
 document.addEventListener('DOMContentLoaded', async function () {
     // Carregar dados do JSON
     allData = await loadLeadsData();
-    
+
     if (allData.length === 0) {
         return; // Sai se não conseguiu carregar os dados
     }
-    
+
     filteredData = [...allData];
 
     initializeColumnToggles();
@@ -92,13 +100,30 @@ function toggleColumns() {
     panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
 }
 
+function toggleStatFilter(filterType) {
+    // Toggle o filtro
+    activeStatFilters[filterType] = !activeStatFilters[filterType];
+
+    // Atualiza visual do card
+    const statCard = document.getElementById(`stat${filterType.charAt(0).toUpperCase() + filterType.slice(1).replace('whatsapp', 'WhatsApp').replace('specialty', 'Specialty').replace('location', 'Location').replace('email', 'Email')}`);
+
+    if (activeStatFilters[filterType]) {
+        statCard.classList.add('active');
+    } else {
+        statCard.classList.remove('active');
+    }
+
+    // Aplica os filtros
+    applyFilters();
+}
+
 function updateTableHeader() {
     const headerDiv = document.getElementById('tableHeader');
     const visibleColumns = columns.filter(c => c.visible);
-    
+
     // Create header cells
     headerDiv.innerHTML = '';
-    
+
     visibleColumns.forEach(col => {
         const cell = document.createElement('div');
         cell.className = 'table-cell-header';
@@ -107,11 +132,11 @@ function updateTableHeader() {
             cell.classList.add('sorted');
         }
         cell.onclick = () => sortTable(col.id);
-        
+
         const text = document.createElement('span');
         text.textContent = col.label;
         cell.appendChild(text);
-        
+
         const icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
         icon.setAttribute('class', 'sort-icon');
         icon.setAttribute('width', '12');
@@ -119,7 +144,7 @@ function updateTableHeader() {
         icon.setAttribute('viewBox', '0 0 12 12');
         icon.setAttribute('fill', 'none');
         icon.setAttribute('stroke', 'currentColor');
-        
+
         if (sortColumn === col.id) {
             if (sortDirection === 'asc') {
                 icon.innerHTML = '<path d="M6 2v8M3 7l3 3 3-3" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>';
@@ -129,7 +154,7 @@ function updateTableHeader() {
         } else {
             icon.innerHTML = '<path d="M6 2v8M3 4l3-3 3 3M3 8l3 3 3-3" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>';
         }
-        
+
         cell.appendChild(icon);
         headerDiv.appendChild(cell);
     });
@@ -138,7 +163,7 @@ function updateTableHeader() {
 function formatPhone(phone) {
     if (!phone || phone === '0') return '';
     let cleaned = String(phone).replace(/\D/g, '');
-    
+
     if (cleaned.length === 11) {
         return `(${cleaned.substring(0, 2)}) ${cleaned.substring(2, 3)} ${cleaned.substring(3, 7)}-${cleaned.substring(7)}`;
     } else if (cleaned.length === 10) {
@@ -158,28 +183,28 @@ function formatMultiplePhones(phones) {
 function renderTable() {
     const tbody = document.getElementById('tableBody');
     tbody.innerHTML = '';
-    
+
     const start = (currentPage - 1) * pageSize;
     const end = start + pageSize;
     const pageData = filteredData.slice(start, end);
-    
+
     if (pageData.length === 0) {
         document.getElementById('noResults').style.display = 'flex';
         document.getElementById('tableWrapper').style.display = 'none';
     } else {
         document.getElementById('noResults').style.display = 'none';
         document.getElementById('tableWrapper').style.display = 'block';
-        
+
         pageData.forEach(row => {
             const tr = document.createElement('div');
             tr.className = 'table-row';
-            
+
             columns.filter(c => c.visible).forEach(col => {
                 const td = document.createElement('div');
                 td.className = 'table-cell';
                 td.style.width = col.width;
                 let value = row[col.id];
-                
+
                 if (col.id === 'Conta_Insta') {
                     td.innerHTML = `<a href="https://instagram.com/${value}" target="_blank" class="cell-link">@${value}</a>`;
                 } else if (col.id === 'Telefone') {
@@ -225,20 +250,20 @@ function renderTable() {
                 } else {
                     td.textContent = value && value !== '0' ? value : '';
                 }
-                
+
                 tr.appendChild(td);
             });
             tbody.appendChild(tr);
         });
     }
-    
+
     updatePagination();
 }
 
 function toggleBio(bioId) {
     const bioCell = document.getElementById(bioId);
     const toggle = bioCell.nextElementSibling;
-    
+
     if (bioCell.classList.contains('collapsed')) {
         bioCell.classList.remove('collapsed');
         toggle.textContent = 'ver menos';
@@ -255,19 +280,19 @@ function sortTable(columnId) {
         sortColumn = columnId;
         sortDirection = 'asc';
     }
-    
+
     filteredData.sort((a, b) => {
         let aVal = a[columnId] || '';
         let bVal = b[columnId] || '';
-        
+
         if (typeof aVal === 'string') aVal = aVal.toLowerCase();
         if (typeof bVal === 'string') bVal = bVal.toLowerCase();
-        
+
         if (aVal < bVal) return sortDirection === 'asc' ? -1 : 1;
         if (aVal > bVal) return sortDirection === 'asc' ? 1 : -1;
         return 0;
     });
-    
+
     updateTableHeader();
     renderTable();
 }
@@ -279,26 +304,45 @@ function applyFilters() {
     const searchEspecialidade = document.getElementById('searchEspecialidade').value.toLowerCase();
     const searchCidade = document.getElementById('searchCidade').value.toLowerCase();
     const filterWhatsApp = document.getElementById('filterWhatsApp').value;
-    
+
     filteredData = allData.filter(row => {
-        const matchGlobal = !globalSearch || Object.values(row).some(val => 
+        const matchGlobal = !globalSearch || Object.values(row).some(val =>
             String(val).toLowerCase().includes(globalSearch)
         );
         const matchNome = !searchNome || (row.Nome && row.Nome.toLowerCase().includes(searchNome));
         const matchConta = !searchConta || (row.Conta_Insta && row.Conta_Insta.toLowerCase().includes(searchConta));
         const matchEspecialidade = !searchEspecialidade || (row.Especialidades && row.Especialidades.toLowerCase().includes(searchEspecialidade));
         const matchCidade = !searchCidade || (row.Cidade_Estado && row.Cidade_Estado.toLowerCase().includes(searchCidade));
-        
+
         let matchWhatsApp = true;
         if (filterWhatsApp === 'sim') {
             matchWhatsApp = row.Tem_WhatsApp === 'Sim';
         } else if (filterWhatsApp === 'nao') {
             matchWhatsApp = row.Tem_WhatsApp !== 'Sim';
         }
-        
-        return matchGlobal && matchNome && matchConta && matchEspecialidade && matchCidade && matchWhatsApp;
+
+        // Filtros por estatísticas (clicáveis)
+        let matchStatFilters = true;
+
+        if (activeStatFilters.specialty) {
+            matchStatFilters = matchStatFilters && (row.Especialidades && row.Especialidades !== '');
+        }
+
+        if (activeStatFilters.location) {
+            matchStatFilters = matchStatFilters && (row.Cidade_Estado && row.Cidade_Estado !== '');
+        }
+
+        if (activeStatFilters.whatsapp) {
+            matchStatFilters = matchStatFilters && (row.Tem_WhatsApp === 'Sim');
+        }
+
+        if (activeStatFilters.email) {
+            matchStatFilters = matchStatFilters && ((row['e-mail'] && row['e-mail'] !== '0') || (row.Email_Bio && row.Email_Bio !== ''));
+        }
+
+        return matchGlobal && matchNome && matchConta && matchEspecialidade && matchCidade && matchWhatsApp && matchStatFilters;
     });
-    
+
     currentPage = 1;
     updateStats();
     renderTable();
@@ -311,6 +355,21 @@ function clearFilters() {
     document.getElementById('searchEspecialidade').value = '';
     document.getElementById('searchCidade').value = '';
     document.getElementById('filterWhatsApp').value = '';
+
+    // Limpa filtros de estatísticas
+    activeStatFilters = {
+        specialty: false,
+        location: false,
+        whatsapp: false,
+        email: false
+    };
+
+    // Remove classe active dos cards
+    document.getElementById('statSpecialty').classList.remove('active');
+    document.getElementById('statLocation').classList.remove('active');
+    document.getElementById('statWhatsApp').classList.remove('active');
+    document.getElementById('statEmail').classList.remove('active');
+
     applyFilters();
 }
 
@@ -381,4 +440,22 @@ function exportToCSV() {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+}
+
+// Função para Marcar/Desmarcar todas
+function toggleAllColumns(shouldShow) {
+    // 1. Atualiza o estado lógico do array de colunas
+    columns.forEach(col => {
+        col.visible = shouldShow;
+    });
+
+    // 2. Atualiza visualmente os checkboxes HTML
+    const checkboxes = document.querySelectorAll('#columnCheckboxes input[type="checkbox"]');
+    checkboxes.forEach(box => {
+        box.checked = shouldShow;
+    });
+
+    // 3. Renderiza a tabela novamente com o novo estado
+    updateTableHeader();
+    renderTable();
 }

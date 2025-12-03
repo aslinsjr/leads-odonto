@@ -202,6 +202,48 @@ body {
     transform: translateY(-2px);
 }
 
+.stat-clickable {
+    cursor: pointer;
+    position: relative;
+}
+
+.stat-clickable:hover {
+    border-color: var(--accent-light);
+    box-shadow: 0 4px 12px rgba(74, 144, 226, 0.2);
+}
+
+.stat-clickable.active {
+    background: var(--accent);
+    border-color: var(--accent);
+}
+
+.stat-clickable.active .stat-value {
+    color: white;
+}
+
+.stat-clickable.active .stat-label {
+    color: rgba(255, 255, 255, 0.9);
+}
+
+.stat-clickable::after {
+    content: '🔍';
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+    font-size: 0.75rem;
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.stat-clickable:hover::after {
+    opacity: 0.5;
+}
+
+.stat-clickable.active::after {
+    content: '✓';
+    opacity: 1;
+}
+
 .stat-value {
     font-size: 2rem;
     font-weight: 600;
@@ -333,15 +375,18 @@ body {
 /* Custom Table */
 .table-wrapper {
     padding: 2rem;
-    overflow-x: auto;
+    overflow-x: scroll;
+    transform: rotateX(180deg); /* Vira o container (e o scroll) de cabeça para baixo */
+    -ms-transform: rotateX(180deg);
 }
 
 .custom-table {
-    min-width: 100%;
+    width: fit-content;
     background: var(--bg-secondary);
     border-radius: 0.75rem;
     border: 1px solid var(--border);
-    overflow: hidden;
+    transform: rotateX(180deg); /* Vira o conteúdo de volta para cima */
+    -ms-transform: rotateX(180deg); /* Compatibilidade IE */
 }
 
 /* Table Header */
@@ -579,6 +624,51 @@ body {
     outline: none;
     border-color: var(--accent);
     background: var(--bg-hover);
+}
+
+/* Adicione isso ao final do style.css */
+
+.column-actions-bar {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.btn-mini {
+    padding: 0.4rem 0.8rem;
+    font-size: 0.75rem;
+    border-radius: 0.25rem;
+    border: none;
+    cursor: pointer;
+    background: var(--accent);
+    color: white;
+    transition: all 0.2s;
+    font-weight: 500;
+}
+
+.btn-mini:hover {
+    background: var(--accent-hover);
+}
+
+.btn-mini.btn-outline {
+    background: transparent;
+    border: 1px solid var(--border-light);
+    color: var(--text-secondary);
+}
+
+.btn-mini.btn-outline:hover {
+    border-color: var(--text-primary);
+    color: var(--text-primary);
+    background: var(--bg-hover);
+}
+
+/* Ajuste fino para os checkboxes ficarem alinhados */
+.column-checkboxes {
+    max-height: 300px;
+    overflow-y: auto; /* Adiciona scroll se houver muitas colunas */
+    padding-right: 5px;
 }
 
 /* Responsive */
