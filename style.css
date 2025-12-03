@@ -301,7 +301,6 @@ body {
 /* Content */
 .content {
     flex: 1;
-    padding: 0;
     overflow-x: auto;
 }
 
@@ -333,31 +332,23 @@ body {
 
 /* Custom Table */
 .table-wrapper {
-    overflow-x: auto;
     padding: 2rem;
+    overflow-x: auto;
 }
 
 .custom-table {
-    display: grid;
+    min-width: 100%;
     background: var(--bg-secondary);
     border-radius: 0.75rem;
     border: 1px solid var(--border);
     overflow: hidden;
-    min-width: 1200px;
 }
 
 /* Table Header */
 .table-header {
-    display: grid;
+    display: flex;
     background: var(--bg-tertiary);
     border-bottom: 2px solid var(--border-light);
-    position: sticky;
-    top: 0;
-    z-index: 10;
-}
-
-.table-header-row {
-    display: contents;
 }
 
 .table-cell-header {
@@ -373,6 +364,8 @@ body {
     align-items: center;
     gap: 0.5rem;
     border-right: 1px solid var(--border);
+    flex-shrink: 0;
+    min-width: 0;
 }
 
 .table-cell-header:last-child {
@@ -393,6 +386,7 @@ body {
     height: 12px;
     opacity: 0.5;
     transition: all 0.2s;
+    flex-shrink: 0;
 }
 
 .table-cell-header:hover .sort-icon,
@@ -402,14 +396,20 @@ body {
 
 /* Table Body */
 .table-body {
-    display: grid;
+    display: block;
 }
 
 .table-row {
-    display: contents;
+    display: flex;
+    border-bottom: 1px solid var(--border);
+    transition: background 0.2s;
 }
 
-.table-row:hover > .table-cell {
+.table-row:last-child {
+    border-bottom: none;
+}
+
+.table-row:hover {
     background: var(--bg-hover);
 }
 
@@ -417,19 +417,16 @@ body {
     padding: 1rem;
     font-size: 0.875rem;
     color: var(--text-secondary);
-    border-bottom: 1px solid var(--border);
     border-right: 1px solid var(--border);
     transition: all 0.2s;
     overflow: hidden;
     text-overflow: ellipsis;
+    flex-shrink: 0;
+    min-width: 0;
 }
 
 .table-cell:last-child {
     border-right: none;
-}
-
-.table-row:last-child > .table-cell {
-    border-bottom: none;
 }
 
 /* Table Cell Content */

@@ -1,27 +1,27 @@
 let allData = [];
 let filteredData = [];
 let currentPage = 1;
-let pageSize = 24;
+let pageSize = 25;
 let sortColumn = '';
 let sortDirection = 'asc';
 
 // Configuração de colunas
 const columns = [
-    { id: 'ID_Insta', label: 'ID Instagram', visible: false },
-    { id: 'Conta_Insta', label: 'Conta Instagram', visible: true },
-    { id: 'Nome', label: 'Nome', visible: true },
-    { id: 'Especialidades', label: 'Especialidades', visible: true },
-    { id: 'Cidade_Estado', label: 'Cidade/Estado', visible: true },
-    { id: 'Telefone', label: 'Telefone Principal', visible: true },
-    { id: 'Telefones_Bio', label: 'Telefones (Bio)', visible: true },
-    { id: 'e-mail', label: 'E-mail Principal', visible: false },
-    { id: 'Email_Bio', label: 'Email (Bio)', visible: true },
-    { id: 'Endereco', label: 'Endereço', visible: true },
-    { id: 'Tem_WhatsApp', label: 'WhatsApp', visible: true },
-    { id: 'Bio', label: 'Bio Original', visible: true },
-    { id: 'Link-Bio', label: 'Link Bio', visible: false },
-    { id: 'Local', label: 'Local', visible: false },
-    { id: 'Idioma', label: 'Idioma', visible: false },
+    { id: 'ID_Insta', label: 'ID Instagram', visible: false, width: '120px' },
+    { id: 'Conta_Insta', label: 'Instagram', visible: true, width: '160px' },
+    { id: 'Nome', label: 'Nome', visible: true, width: '180px' },
+    { id: 'Especialidades', label: 'Especialidades', visible: true, width: '200px' },
+    { id: 'Cidade_Estado', label: 'Cidade/Estado', visible: true, width: '160px' },
+    { id: 'Telefone', label: 'Telefone', visible: true, width: '140px' },
+    { id: 'Telefones_Bio', label: 'Outros Telefones', visible: true, width: '160px' },
+    { id: 'e-mail', label: 'E-mail', visible: false, width: '200px' },
+    { id: 'Email_Bio', label: 'Email', visible: true, width: '180px' },
+    { id: 'Endereco', label: 'Endereço', visible: true, width: '200px' },
+    { id: 'Tem_WhatsApp', label: 'WhatsApp', visible: true, width: '100px' },
+    { id: 'Bio', label: 'Bio', visible: false, width: '300px' },
+    { id: 'Link-Bio', label: 'Link Bio', visible: false, width: '80px' },
+    { id: 'Local', label: 'Local', visible: false, width: '150px' },
+    { id: 'Idioma', label: 'Idioma', visible: false, width: '100px' },
 ];
 
 // Função para carregar dados do JSON
@@ -52,11 +52,12 @@ document.addEventListener('DOMContentLoaded', async function () {
     filteredData = [...allData];
 
     initializeColumnToggles();
+    updateTableHeader();
     updateStats();
-    renderCards();
+    renderTable();
 
     document.getElementById('loading').style.display = 'none';
-    document.getElementById('cardsGrid').style.display = 'grid';
+    document.getElementById('tableWrapper').style.display = 'block';
     document.getElementById('pagination').style.display = 'flex';
 
     // Event listeners
@@ -77,7 +78,8 @@ function initializeColumnToggles() {
         checkbox.checked = col.visible;
         checkbox.onchange = () => {
             col.visible = checkbox.checked;
-            renderCards();
+            updateTableHeader();
+            renderTable();
         };
         label.appendChild(checkbox);
         label.appendChild(document.createTextNode(' ' + col.label));
@@ -88,6 +90,49 @@ function initializeColumnToggles() {
 function toggleColumns() {
     const panel = document.getElementById('columnPanel');
     panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+}
+
+function updateTableHeader() {
+    const headerDiv = document.getElementById('tableHeader');
+    const visibleColumns = columns.filter(c => c.visible);
+    
+    // Create header cells
+    headerDiv.innerHTML = '';
+    
+    visibleColumns.forEach(col => {
+        const cell = document.createElement('div');
+        cell.className = 'table-cell-header';
+        cell.style.width = col.width;
+        if (sortColumn === col.id) {
+            cell.classList.add('sorted');
+        }
+        cell.onclick = () => sortTable(col.id);
+        
+        const text = document.createElement('span');
+        text.textContent = col.label;
+        cell.appendChild(text);
+        
+        const icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        icon.setAttribute('class', 'sort-icon');
+        icon.setAttribute('width', '12');
+        icon.setAttribute('height', '12');
+        icon.setAttribute('viewBox', '0 0 12 12');
+        icon.setAttribute('fill', 'none');
+        icon.setAttribute('stroke', 'currentColor');
+        
+        if (sortColumn === col.id) {
+            if (sortDirection === 'asc') {
+                icon.innerHTML = '<path d="M6 2v8M3 7l3 3 3-3" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>';
+            } else {
+                icon.innerHTML = '<path d="M6 10V2M3 5l3-3 3 3" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>';
+            }
+        } else {
+            icon.innerHTML = '<path d="M6 2v8M3 4l3-3 3 3M3 8l3 3 3-3" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>';
+        }
+        
+        cell.appendChild(icon);
+        headerDiv.appendChild(cell);
+    });
 }
 
 function formatPhone(phone) {
@@ -110,148 +155,9 @@ function formatMultiplePhones(phones) {
     return phoneArray.map(p => formatPhone(p)).filter(p => p).join(', ');
 }
 
-function getVisibleColumn(col) {
-    return columns.find(c => c.id === col)?.visible || false;
-}
-
-function createCard(lead) {
-    const card = document.createElement('div');
-    card.className = 'card';
-    
-    let cardHTML = `
-        <div class="card-header">
-            <div class="card-title">
-                ${getVisibleColumn('Nome') ? `<div class="card-name">${lead.Nome || 'Sem nome'}</div>` : ''}
-                ${getVisibleColumn('Conta_Insta') && lead.Conta_Insta ? 
-                    `<a href="https://instagram.com/${lead.Conta_Insta}" target="_blank" class="card-instagram">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M12 2c2.717 0 3.056.01 4.122.06 1.065.05 1.79.217 2.428.465.66.254 1.216.598 1.772 1.153a4.908 4.908 0 0 1 1.153 1.772c.247.637.415 1.363.465 2.428.047 1.066.06 1.405.06 4.122 0 2.717-.01 3.056-.06 4.122-.05 1.065-.218 1.79-.465 2.428a4.883 4.883 0 0 1-1.153 1.772 4.915 4.915 0 0 1-1.772 1.153c-.637.247-1.363.415-2.428.465-1.066.047-1.405.06-4.122.06-2.717 0-3.056-.01-4.122-.06-1.065-.05-1.79-.218-2.428-.465a4.89 4.89 0 0 1-1.772-1.153 4.904 4.904 0 0 1-1.153-1.772c-.248-.637-.415-1.363-.465-2.428C2.013 15.056 2 14.717 2 12c0-2.717.01-3.056.06-4.122.05-1.066.217-1.79.465-2.428a4.88 4.88 0 0 1 1.153-1.772A4.897 4.897 0 0 1 5.45 2.525c.638-.248 1.362-.415 2.428-.465C8.944 2.013 9.283 2 12 2zm0 5a5 5 0 1 0 0 10 5 5 0 0 0 0-10zm6.5-.25a1.25 1.25 0 0 0-2.5 0 1.25 1.25 0 0 0 2.5 0zM12 9a3 3 0 1 1 0 6 3 3 0 0 1 0-6z"/>
-                        </svg>
-                        @${lead.Conta_Insta}
-                    </a>` : ''}
-            </div>
-            ${getVisibleColumn('Tem_WhatsApp') && lead.Tem_WhatsApp === 'Sim' ? 
-                '<span class="card-badge">💬 WhatsApp</span>' : ''}
-        </div>
-        <div class="card-content">
-    `;
-
-    // Especialidades
-    if (getVisibleColumn('Especialidades') && lead.Especialidades && lead.Especialidades !== '') {
-        const specs = lead.Especialidades.split(',').map(s => s.trim());
-        cardHTML += `
-            <div class="card-info">
-                <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-                    <path d="M8 2v12M2 8h12"/>
-                </svg>
-                <div class="specialties">
-                    ${specs.map(s => `<span class="specialty-tag">${s}</span>`).join('')}
-                </div>
-            </div>
-        `;
-    }
-
-    // Cidade/Estado
-    if (getVisibleColumn('Cidade_Estado') && lead.Cidade_Estado && lead.Cidade_Estado !== '') {
-        cardHTML += `
-            <div class="card-info">
-                <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-                    <path d="M8 14s-5-3-5-7a5 5 0 0110 0c0 4-5 7-5 7z"/>
-                    <circle cx="8" cy="7" r="2"/>
-                </svg>
-                <span>${lead.Cidade_Estado}</span>
-            </div>
-        `;
-    }
-
-    // Telefone Principal
-    if (getVisibleColumn('Telefone') && lead.Telefone && lead.Telefone !== '0') {
-        const formatted = formatPhone(lead.Telefone);
-        if (formatted) {
-            const phoneNumber = formatted.replace(/\D/g, '');
-            cardHTML += `
-                <div class="card-info">
-                    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-                        <path d="M2 3a1 1 0 011-1h2l1 3-1.5 1.5a8 8 0 004 4L10 10l3 1v2a1 1 0 01-1 1A10 10 0 012 4a1 1 0 010-1z"/>
-                    </svg>
-                    <a href="https://wa.me/55${phoneNumber}" target="_blank">${formatted}</a>
-                </div>
-            `;
-        }
-    }
-
-    // Telefones Bio
-    if (getVisibleColumn('Telefones_Bio') && lead.Telefones_Bio && lead.Telefones_Bio !== '') {
-        const formatted = formatMultiplePhones(lead.Telefones_Bio);
-        if (formatted) {
-            cardHTML += `
-                <div class="card-info">
-                    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-                        <path d="M2 3a1 1 0 011-1h2l1 3-1.5 1.5a8 8 0 004 4L10 10l3 1v2a1 1 0 01-1 1A10 10 0 012 4a1 1 0 010-1z"/>
-                    </svg>
-                    <span>${formatted}</span>
-                </div>
-            `;
-        }
-    }
-
-    // Endereço
-    if (getVisibleColumn('Endereco') && lead.Endereco && lead.Endereco !== '') {
-        cardHTML += `
-            <div class="card-info">
-                <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-                    <rect x="2" y="3" width="12" height="10" rx="1"/>
-                    <path d="M2 6h12M5 3v3M11 3v3"/>
-                </svg>
-                <span>${lead.Endereco}</span>
-            </div>
-        `;
-    }
-
-    // Email
-    if (getVisibleColumn('Email_Bio') && lead.Email_Bio && lead.Email_Bio !== '') {
-        cardHTML += `
-            <div class="card-info">
-                <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-                    <rect x="2" y="4" width="12" height="9" rx="1"/>
-                    <path d="M2 5l6 4 6-4"/>
-                </svg>
-                <a href="mailto:${lead.Email_Bio}">${lead.Email_Bio}</a>
-            </div>
-        `;
-    } else if (getVisibleColumn('e-mail') && lead['e-mail'] && lead['e-mail'] !== '0') {
-        cardHTML += `
-            <div class="card-info">
-                <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-                    <rect x="2" y="4" width="12" height="9" rx="1"/>
-                    <path d="M2 5l6 4 6-4"/>
-                </svg>
-                <a href="mailto:${lead['e-mail']}">${lead['e-mail']}</a>
-            </div>
-        `;
-    }
-
-    // Bio
-    if (getVisibleColumn('Bio') && lead.Bio && lead.Bio !== '') {
-        const bioId = `bio-${lead.ID_Insta}`;
-        const isLong = lead.Bio.length > 150;
-        cardHTML += `
-            <div class="card-bio ${isLong ? 'collapsed' : ''}" id="${bioId}">
-                ${lead.Bio}
-            </div>
-            ${isLong ? `<span class="bio-toggle" onclick="toggleBio('${bioId}')">Ver mais</span>` : ''}
-        `;
-    }
-
-    cardHTML += '</div>'; // close card-content
-    
-    card.innerHTML = cardHTML;
-    return card;
-}
-
-function renderCards() {
-    const grid = document.getElementById('cardsGrid');
-    grid.innerHTML = '';
+function renderTable() {
+    const tbody = document.getElementById('tableBody');
+    tbody.innerHTML = '';
     
     const start = (currentPage - 1) * pageSize;
     const end = start + pageSize;
@@ -259,14 +165,70 @@ function renderCards() {
     
     if (pageData.length === 0) {
         document.getElementById('noResults').style.display = 'flex';
-        document.getElementById('cardsGrid').style.display = 'none';
+        document.getElementById('tableWrapper').style.display = 'none';
     } else {
         document.getElementById('noResults').style.display = 'none';
-        document.getElementById('cardsGrid').style.display = 'grid';
+        document.getElementById('tableWrapper').style.display = 'block';
         
-        pageData.forEach(lead => {
-            const card = createCard(lead);
-            grid.appendChild(card);
+        pageData.forEach(row => {
+            const tr = document.createElement('div');
+            tr.className = 'table-row';
+            
+            columns.filter(c => c.visible).forEach(col => {
+                const td = document.createElement('div');
+                td.className = 'table-cell';
+                td.style.width = col.width;
+                let value = row[col.id];
+                
+                if (col.id === 'Conta_Insta') {
+                    td.innerHTML = `<a href="https://instagram.com/${value}" target="_blank" class="cell-link">@${value}</a>`;
+                } else if (col.id === 'Telefone') {
+                    if (value && value !== '0') {
+                        const formatted = formatPhone(value);
+                        if (formatted) {
+                            const phoneNumber = formatted.replace(/\D/g, '');
+                            td.innerHTML = `<a href="https://wa.me/55${phoneNumber}" target="_blank" class="cell-link">${formatted}</a>`;
+                        }
+                    }
+                } else if (col.id === 'Telefones_Bio') {
+                    if (value && value !== '0' && value !== '') {
+                        const formatted = formatMultiplePhones(value);
+                        if (formatted) {
+                            td.textContent = formatted;
+                        }
+                    }
+                } else if (col.id === 'Especialidades') {
+                    if (value && value !== '') {
+                        const specs = value.split(',').map(s => s.trim());
+                        td.innerHTML = specs.map(s => `<span class="specialty-badge">${s}</span>`).join(' ');
+                    }
+                } else if (col.id === 'Tem_WhatsApp') {
+                    if (value === 'Sim') {
+                        td.innerHTML = '<span class="whatsapp-badge">✓ WhatsApp</span>';
+                    }
+                } else if (col.id === 'Bio') {
+                    const bioId = `bio-${row.ID_Insta}`;
+                    if (value && value.length > 100) {
+                        td.innerHTML = `<div class="bio-cell collapsed" id="${bioId}">${value}</div><span class="bio-toggle" onclick="toggleBio('${bioId}')">ver mais</span>`;
+                    } else {
+                        td.textContent = value || '';
+                    }
+                } else if (col.id === 'Link-Bio') {
+                    if (value && value !== '0') {
+                        const url = value.startsWith('http') ? value : `https://${value}`;
+                        td.innerHTML = `<a href="${url}" target="_blank" class="cell-link">🔗</a>`;
+                    }
+                } else if (col.id === 'e-mail' || col.id === 'Email_Bio') {
+                    if (value && value !== '0' && value !== '') {
+                        td.innerHTML = `<a href="mailto:${value}" class="cell-link">${value}</a>`;
+                    }
+                } else {
+                    td.textContent = value && value !== '0' ? value : '';
+                }
+                
+                tr.appendChild(td);
+            });
+            tbody.appendChild(tr);
         });
     }
     
@@ -274,17 +236,40 @@ function renderCards() {
 }
 
 function toggleBio(bioId) {
-    const bioEl = document.getElementById(bioId);
-    const card = bioEl.closest('.card');
-    const toggle = card.querySelector('.bio-toggle');
+    const bioCell = document.getElementById(bioId);
+    const toggle = bioCell.nextElementSibling;
     
-    if (bioEl.classList.contains('collapsed')) {
-        bioEl.classList.remove('collapsed');
-        toggle.textContent = 'Ver menos';
+    if (bioCell.classList.contains('collapsed')) {
+        bioCell.classList.remove('collapsed');
+        toggle.textContent = 'ver menos';
     } else {
-        bioEl.classList.add('collapsed');
-        toggle.textContent = 'Ver mais';
+        bioCell.classList.add('collapsed');
+        toggle.textContent = 'ver mais';
     }
+}
+
+function sortTable(columnId) {
+    if (sortColumn === columnId) {
+        sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
+    } else {
+        sortColumn = columnId;
+        sortDirection = 'asc';
+    }
+    
+    filteredData.sort((a, b) => {
+        let aVal = a[columnId] || '';
+        let bVal = b[columnId] || '';
+        
+        if (typeof aVal === 'string') aVal = aVal.toLowerCase();
+        if (typeof bVal === 'string') bVal = bVal.toLowerCase();
+        
+        if (aVal < bVal) return sortDirection === 'asc' ? -1 : 1;
+        if (aVal > bVal) return sortDirection === 'asc' ? 1 : -1;
+        return 0;
+    });
+    
+    updateTableHeader();
+    renderTable();
 }
 
 function applyFilters() {
@@ -316,7 +301,7 @@ function applyFilters() {
     
     currentPage = 1;
     updateStats();
-    renderCards();
+    renderTable();
 }
 
 function clearFilters() {
@@ -330,10 +315,12 @@ function clearFilters() {
 }
 
 function updateStats() {
+    document.getElementById('totalLeads').textContent = allData.length;
     document.getElementById('filteredLeads').textContent = filteredData.length;
     document.getElementById('withSpecialty').textContent = filteredData.filter(r => r.Especialidades && r.Especialidades !== '').length;
     document.getElementById('withLocation').textContent = filteredData.filter(r => r.Cidade_Estado && r.Cidade_Estado !== '').length;
     document.getElementById('withWhatsApp').textContent = filteredData.filter(r => r.Tem_WhatsApp === 'Sim').length;
+    document.getElementById('withEmail').textContent = filteredData.filter(r => (r['e-mail'] && r['e-mail'] !== '0') || (r.Email_Bio && r.Email_Bio !== '')).length;
 }
 
 function updatePagination() {
@@ -347,7 +334,7 @@ function updatePagination() {
 function previousPage() {
     if (currentPage > 1) {
         currentPage--;
-        renderCards();
+        renderTable();
         window.scrollTo({ top: 0, behavior: 'smooth' });
     }
 }
@@ -356,7 +343,7 @@ function nextPage() {
     const totalPages = Math.ceil(filteredData.length / pageSize);
     if (currentPage < totalPages) {
         currentPage++;
-        renderCards();
+        renderTable();
         window.scrollTo({ top: 0, behavior: 'smooth' });
     }
 }
@@ -364,7 +351,7 @@ function nextPage() {
 function changePageSize() {
     pageSize = parseInt(document.getElementById('pageSize').value);
     currentPage = 1;
-    renderCards();
+    renderTable();
 }
 
 function exportToCSV() {
