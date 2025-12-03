@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Leads Odonto - Alliance3</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="script.js" defer></script>
+</head>
+<body>
+    <div class="app">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <h1>📊 Leads Odonto - Alliance3</h1>
+                <p class="subtitle">Sistema de Gestão de Leads Odontológicos</p>
+            </div>
+        </header>
+
+        <!-- Controls -->
+        <div class="controls">
+            <!-- Search Bar -->
+            <div class="search-main">
+                <svg class="search-icon" width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor">
+                    <circle cx="8" cy="8" r="6" stroke-width="2"/>
+                    <path d="M13 13l5 5" stroke-width="2" stroke-linecap="round"/>
+                </svg>
+                <input type="text" id="globalSearch" placeholder="Buscar em todos os campos...">
+            </div>
+
+            <!-- Filters -->
+            <div class="filters">
+                <input type="text" id="searchNome" placeholder="👤 Nome">
+                <input type="text" id="searchConta" placeholder="📱 Instagram">
+                <input type="text" id="searchEspecialidade" placeholder="🦷 Especialidade">
+                <input type="text" id="searchCidade" placeholder="📍 Cidade">
+                <select id="filterWhatsApp">
+                    <option value="">💬 WhatsApp - Todos</option>
+                    <option value="sim">✓ Com WhatsApp</option>
+                    <option value="nao">✗ Sem WhatsApp</option>
+                </select>
+            </div>
+
+            <!-- Actions -->
+            <div class="actions">
+                <button class="btn btn-secondary" onclick="clearFilters()">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor">
+                        <path d="M12 4L4 12M4 4l8 8" stroke-width="2" stroke-linecap="round"/>
+                    </svg>
+                    Limpar Filtros
+                </button>
+                <button class="btn btn-primary" onclick="toggleColumns()">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor">
+                        <rect x="2" y="2" width="5" height="5" stroke-width="1.5"/>
+                        <rect x="9" y="2" width="5" height="5" stroke-width="1.5"/>
+                        <rect x="2" y="9" width="5" height="5" stroke-width="1.5"/>
+                        <rect x="9" y="9" width="5" height="5" stroke-width="1.5"/>
+                    </svg>
+                    Colunas
+                </button>
+                <button class="btn btn-export" onclick="exportToCSV()">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor">
+                        <path d="M8 2v10M4 8l4 4 4-4" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        <path d="M2 14h12" stroke-width="2" stroke-linecap="round"/>
+                    </svg>
+                    Exportar CSV
+                </button>
+            </div>
+
+            <!-- Stats -->
+            <div class="stats">
+                <div class="stat">
+                    <div class="stat-value" id="filteredLeads">0</div>
+                    <div class="stat-label">Leads Filtrados</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value" id="totalLeads">0</div>
+                    <div class="stat-label">Total de Leads</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value" id="withSpecialty">0</div>
+                    <div class="stat-label">Com Especialidade</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value" id="withLocation">0</div>
+                    <div class="stat-label">Com Localização</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value" id="withWhatsApp">0</div>
+                    <div class="stat-label">Com WhatsApp</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value" id="withEmail">0</div>
+                    <div class="stat-label">Com Email</div>
+                </div>
+            </div>
+
+            <!-- Column Toggle (Hidden by default) -->
+            <div class="column-panel" id="columnPanel" style="display: none;">
+                <div class="column-panel-header">
+                    <h3>Colunas Visíveis</h3>
+                    <button class="btn-close" onclick="toggleColumns()">✕</button>
+                </div>
+                <div class="column-checkboxes" id="columnCheckboxes"></div>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <main class="content">
+            <div class="loading" id="loading">
+                <div class="spinner"></div>
+                <p>Carregando dados...</p>
+            </div>
+            
+            <div class="table-wrapper" id="tableWrapper" style="display: none;">
+                <div class="custom-table" id="customTable">
+                    <!-- Header será gerado dinamicamente -->
+                    <div class="table-header" id="tableHeader"></div>
+                    <!-- Body será gerado dinamicamente -->
+                    <div class="table-body" id="tableBody"></div>
+                </div>
+            </div>
+            
+            <div class="no-results" id="noResults" style="display: none;">
+                <svg width="64" height="64" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="26" cy="26" r="16"/>
+                    <path d="M38 38l16 16" stroke-linecap="round"/>
+                </svg>
+                <h3>Nenhum resultado encontrado</h3>
+                <p>Tente ajustar os filtros de busca</p>
+            </div>
+        </main>
+
+        <!-- Pagination -->
+        <div class="pagination" id="pagination" style="display: none;">
+            <button class="btn-page" onclick="previousPage()" id="prevBtn">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                    <path d="M10 2L4 8l6 6"/>
+                </svg>
+                Anterior
+            </button>
+            <div class="page-info">
+                Página <span id="currentPage">1</span> de <span id="totalPages">1</span>
+            </div>
+            <button class="btn-page" onclick="nextPage()" id="nextBtn">
+                Próxima
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                    <path d="M6 2l6 6-6 6"/>
+                </svg>
+            </button>
+            <select id="pageSize" onchange="changePageSize()">
+                <option value="10">10 por página</option>
+                <option value="25" selected>25 por página</option>
+                <option value="50">50 por página</option>
+                <option value="100">100 por página</option>
+            </select>
+        </div>
+    </div>
+</body>
+</html>
