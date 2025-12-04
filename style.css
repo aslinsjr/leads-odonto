@@ -273,6 +273,7 @@ body {
         opacity: 0;
         transform: translateY(-10px);
     }
+
     to {
         opacity: 1;
         transform: translateY(0);
@@ -365,7 +366,9 @@ body {
 }
 
 @keyframes spin {
-    to { transform: rotate(360deg); }
+    to {
+        transform: rotate(360deg);
+    }
 }
 
 .loading p {
@@ -376,7 +379,8 @@ body {
 .table-wrapper {
     padding: 2rem;
     overflow-x: scroll;
-    transform: rotateX(180deg); /* Vira o container (e o scroll) de cabeça para baixo */
+    transform: rotateX(180deg);
+    /* Vira o container (e o scroll) de cabeça para baixo */
     -ms-transform: rotateX(180deg);
 }
 
@@ -385,8 +389,10 @@ body {
     background: var(--bg-secondary);
     border-radius: 0.75rem;
     border: 1px solid var(--border);
-    transform: rotateX(180deg); /* Vira o conteúdo de volta para cima */
-    -ms-transform: rotateX(180deg); /* Compatibilidade IE */
+    transform: rotateX(180deg);
+    /* Vira o conteúdo de volta para cima */
+    -ms-transform: rotateX(180deg);
+    /* Compatibilidade IE */
 }
 
 /* Table Header */
@@ -667,7 +673,8 @@ body {
 /* Ajuste fino para os checkboxes ficarem alinhados */
 .column-checkboxes {
     max-height: 300px;
-    overflow-y: auto; /* Adiciona scroll se houver muitas colunas */
+    overflow-y: auto;
+    /* Adiciona scroll se houver muitas colunas */
     padding-right: 5px;
 }
 
@@ -734,4 +741,46 @@ body {
 
 ::-webkit-scrollbar-thumb:hover {
     background: var(--accent);
+}
+
+@media (prefers-color-scheme: light) {
+    :root {
+        /* Fundos: Invertidos para tons de branco e cinza muito claro */
+        --bg-primary: #f0f2f5;
+        /* Fundo geral da página (cinza bem claro) */
+        --bg-secondary: #ffffff;
+        /* Fundo de cards, header e containers (branco puro) */
+        --bg-tertiary: #f8f9fa;
+        /* Inputs e elementos de destaque leve */
+        --bg-hover: #e9ecef;
+        /* Estado de hover */
+
+        /* Bordas: Cinzas suaves para separar o branco */
+        --border: #dee2e6;
+        --border-light: #ced4da;
+
+        /* Textos: Invertidos para tons de cinza escuro e preto */
+        --text-primary: #212529;
+        /* Quase preto para leitura principal */
+        --text-secondary: #495057;
+        /* Cinza médio para subtítulos */
+        --text-muted: #868e96;
+        /* Cinza claro para placeholders */
+
+        /* Acentos: Ajustados levemente para melhor contraste no fundo branco */
+        --accent: #3182ce;
+        /* Azul um pouco mais sóbrio */
+        --accent-hover: #2c5282;
+        /* Azul escuro no hover */
+        --accent-light: #63b3ed;
+        /* Azul claro para detalhes */
+
+        /* Status: Cores levemente escurecidas para legibilidade no branco */
+        --success: #059669;
+        /* Verde mais denso */
+        --warning: #d97706;
+        /* Laranja queimado */
+        --danger: #dc2626;
+        /* Vermelho forte */
+    }
 }
