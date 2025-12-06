@@ -1,461 +1,662 @@
-let allData = [];
+let originalData = [];
 let filteredData = [];
+let currentSort = { column: null, ascending: true };
 let currentPage = 1;
-let pageSize = 25;
-let sortColumn = '';
-let sortDirection = 'asc';
+let pageSize = 50;
+let pageCache = new Map();
+let columnFilters = {};
+let searchTerm = '';
 
-// Filtros ativos por estatística
-let activeStatFilters = {
-    specialty: false,
-    location: false,
-    whatsapp: false,
-    email: false
-};
-
-// Configuração de colunas
-const columns = [
-    { id: 'ID_Insta', label: 'ID Instagram', visible: false, width: '120px' },
-    { id: 'Conta_Insta', label: 'Instagram', visible: true, width: '160px' },
-    { id: 'Nome', label: 'Nome', visible: true, width: '180px' },
-    { id: 'Especialidades', label: 'Especialidades', visible: true, width: '200px' },
-    { id: 'Cidade_Estado', label: 'Cidade/Estado', visible: true, width: '160px' },
-    { id: 'Telefone', label: 'Telefone', visible: true, width: '140px' },
-    { id: 'Telefones_Bio', label: 'Outros Telefones', visible: true, width: '160px' },
-    { id: 'e-mail', label: 'E-mail', visible: false, width: '200px' },
-    { id: 'Email_Bio', label: 'E-mail Bio', visible: true, width: '180px' },
-    { id: 'Endereco', label: 'Endereço', visible: true, width: '200px' },
-    { id: 'Tem_WhatsApp', label: 'WhatsApp', visible: true, width: '100px' },
-    { id: 'Bio', label: 'Bio', visible: true, width: '300px' },
-    { id: 'Link-Bio', label: 'Link Bio', visible: false, width: '80px' },
-    { id: 'Local', label: 'Local', visible: false, width: '150px' },
-    { id: 'Idioma', label: 'Idioma', visible: false, width: '100px' },
-];
-
-// Função para carregar dados do JSON
-async function loadLeadsData() {
-    try {
-        const response = await fetch('leads_data.json');
-        if (!response.ok) {
-            throw new Error(`Erro HTTP: ${response.status}`);
-        }
-        const data = await response.json();
-        return data;
-    } catch (error) {
-        console.error('Erro ao carregar leads_data.json:', error);
-        document.getElementById('loading').innerHTML = '<div class="spinner"></div><p>❌ Erro ao carregar dados. Verifique se o arquivo leads_data.json está no mesmo diretório.</p>';
-        return [];
-    }
-}
-
-// Inicialização quando o documento carregar
-document.addEventListener('DOMContentLoaded', async function () {
-    // Carregar dados do JSON
-    allData = await loadLeadsData();
-
-    if (allData.length === 0) {
-        return; // Sai se não conseguiu carregar os dados
-    }
-
-    filteredData = [...allData];
-
-    initializeColumnToggles();
-    updateTableHeader();
-    updateStats();
-    renderTable();
-
-    document.getElementById('loading').style.display = 'none';
-    document.getElementById('tableWrapper').style.display = 'block';
-    document.getElementById('pagination').style.display = 'flex';
-
-    // Event listeners
-    document.getElementById('globalSearch').addEventListener('input', applyFilters);
-    document.getElementById('searchNome').addEventListener('input', applyFilters);
-    document.getElementById('searchConta').addEventListener('input', applyFilters);
-    document.getElementById('searchEspecialidade').addEventListener('input', applyFilters);
-    document.getElementById('searchCidade').addEventListener('input', applyFilters);
-    document.getElementById('filterWhatsApp').addEventListener('change', applyFilters);
-});
-
-function initializeColumnToggles() {
-    const container = document.getElementById('columnCheckboxes');
-    columns.forEach(col => {
-        const label = document.createElement('label');
-        const checkbox = document.createElement('input');
-        checkbox.type = 'checkbox';
-        checkbox.checked = col.visible;
-        checkbox.onchange = () => {
-            col.visible = checkbox.checked;
-            updateTableHeader();
-            renderTable();
+// Debounce para otimizar buscas
+function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func(...args);
         };
-        label.appendChild(checkbox);
-        label.appendChild(document.createTextNode(' ' + col.label));
-        container.appendChild(label);
-    });
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
 }
 
-function toggleColumns() {
-    const panel = document.getElementById('columnPanel');
-    panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+// Carrega dados com indicador de progresso
+async function loadData() {
+    try {
+        showLoading(true, 'Carregando arquivo...');
+        const response = await fetch('dados.json');
+        const data = await response.json();
+        
+        showLoading(true, `Processando ${data.length} registros...`);
+        
+        // Processa dados em chunks para não travar o browser
+        const chunkSize = 1000;
+        originalData = [];
+        
+        for (let i = 0; i < data.length; i += chunkSize) {
+            const chunk = data.slice(i, Math.min(i + chunkSize, data.length));
+            originalData.push(...chunk);
+            
+            const progress = Math.round((i / data.length) * 100);
+            updateLoadingProgress(progress, i);
+            
+            // Permite que o browser respire
+            await new Promise(resolve => setTimeout(resolve, 10));
+        }
+        
+        filteredData = [...originalData];
+        initializeFilters();
+        renderTable(filteredData);
+        updateStats();
+        updatePaginationControls();
+        showLoading(false);
+    } catch (error) {
+        console.error('Erro ao carregar dados:', error);
+        document.getElementById('tableBody').innerHTML = 
+            '<tr><td colspan="10" class="no-data">Erro ao carregar dados. Verifique se o arquivo "dados.json" está no mesmo diretório.</td></tr>';
+        showLoading(false);
+    }
 }
 
-function toggleStatFilter(filterType) {
-    // Toggle o filtro
-    activeStatFilters[filterType] = !activeStatFilters[filterType];
-
-    // Atualiza visual do card
-    const statCard = document.getElementById(`stat${filterType.charAt(0).toUpperCase() + filterType.slice(1).replace('whatsapp', 'WhatsApp').replace('specialty', 'Specialty').replace('location', 'Location').replace('email', 'Email')}`);
-
-    if (activeStatFilters[filterType]) {
-        statCard.classList.add('active');
+// Sistema de loading
+function showLoading(show, message = 'Processando...') {
+    const overlay = document.getElementById('loadingOverlay');
+    if (!overlay) return;
+    
+    if (show) {
+        overlay.style.display = 'flex';
+        const loadingText = document.querySelector('.loading-text');
+        if (loadingText) {
+            loadingText.textContent = message;
+        }
     } else {
-        statCard.classList.remove('active');
+        overlay.style.display = 'none';
     }
-
-    // Aplica os filtros
-    applyFilters();
 }
 
-function updateTableHeader() {
-    const headerDiv = document.getElementById('tableHeader');
-    const visibleColumns = columns.filter(c => c.visible);
-
-    // Create header cells
-    headerDiv.innerHTML = '';
-
-    visibleColumns.forEach(col => {
-        const cell = document.createElement('div');
-        cell.className = 'table-cell-header';
-        cell.style.width = col.width;
-        if (sortColumn === col.id) {
-            cell.classList.add('sorted');
-        }
-        cell.onclick = () => sortTable(col.id);
-
-        const text = document.createElement('span');
-        text.textContent = col.label;
-        cell.appendChild(text);
-
-        const icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-        icon.setAttribute('class', 'sort-icon');
-        icon.setAttribute('width', '12');
-        icon.setAttribute('height', '12');
-        icon.setAttribute('viewBox', '0 0 12 12');
-        icon.setAttribute('fill', 'none');
-        icon.setAttribute('stroke', 'currentColor');
-
-        if (sortColumn === col.id) {
-            if (sortDirection === 'asc') {
-                icon.innerHTML = '<path d="M6 2v8M3 7l3 3 3-3" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>';
-            } else {
-                icon.innerHTML = '<path d="M6 10V2M3 5l3-3 3 3" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>';
-            }
-        } else {
-            icon.innerHTML = '<path d="M6 2v8M3 4l3-3 3 3M3 8l3 3 3-3" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>';
-        }
-
-        cell.appendChild(icon);
-        headerDiv.appendChild(cell);
-    });
-}
-
-function formatPhone(phone) {
-    if (!phone || phone === '0') return '';
-    let cleaned = String(phone).replace(/\D/g, '');
-
-    if (cleaned.length === 11) {
-        return `(${cleaned.substring(0, 2)}) ${cleaned.substring(2, 3)} ${cleaned.substring(3, 7)}-${cleaned.substring(7)}`;
-    } else if (cleaned.length === 10) {
-        return `(${cleaned.substring(0, 2)}) ${cleaned.substring(2, 6)}-${cleaned.substring(6)}`;
-    } else if (cleaned.length === 9) {
-        return `${cleaned.substring(0, 1)} ${cleaned.substring(1, 5)}-${cleaned.substring(5)}`;
+function updateLoadingProgress(progress, count) {
+    const loadingBar = document.getElementById('loadingBar');
+    const loadingCount = document.getElementById('loadingCount');
+    
+    if (loadingBar) {
+        loadingBar.style.width = progress + '%';
     }
-    return phone;
+    if (loadingCount) {
+        loadingCount.textContent = count.toLocaleString('pt-BR');
+    }
 }
 
-function formatMultiplePhones(phones) {
-    if (!phones || phones === '0' || phones === '') return '';
-    const phoneArray = phones.split(',').map(p => p.trim());
-    return phoneArray.map(p => formatPhone(p)).filter(p => p).join(', ');
-}
-
-function renderTable() {
+// Renderização otimizada com cache
+function renderTable(data) {
     const tbody = document.getElementById('tableBody');
-    tbody.innerHTML = '';
+    
+    if (data.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="10" class="no-data">Nenhum resultado encontrado</td></tr>';
+        return;
+    }
 
-    const start = (currentPage - 1) * pageSize;
-    const end = start + pageSize;
-    const pageData = filteredData.slice(start, end);
+    const startIndex = (currentPage - 1) * pageSize;
+    const endIndex = startIndex + pageSize;
+    const pageKey = `${currentPage}-${pageSize}-${data.length}`;
+    
+    // Verifica cache
+    if (pageCache.has(pageKey)) {
+        tbody.innerHTML = pageCache.get(pageKey);
+        return;
+    }
 
-    if (pageData.length === 0) {
-        document.getElementById('noResults').style.display = 'flex';
-        document.getElementById('tableWrapper').style.display = 'none';
-    } else {
-        document.getElementById('noResults').style.display = 'none';
-        document.getElementById('tableWrapper').style.display = 'block';
+    const paginatedData = data.slice(startIndex, endIndex);
+    const html = paginatedData.map(item => `
+        <tr>
+            <td>${item.ID_Insta || '-'}</td>
+            <td><strong>@${item.Conta_Insta || '-'}</strong></td>
+            <td>${item.Nome || '-'}</td>
+            <td style="max-width: 300px;">${item.Bio || '-'}</td>
+            <td class="phone">${item.Telefone || '-'}</td>
+            <td class="email">${item['e-mail'] || '-'}</td>
+            <td class="link" style="max-width: 150px;">${item['Link-Bio'] || '-'}</td>
+            <td>${item.Local || '-'}</td>
+            <td><span class="badge">${String(item.Idioma || '-').toUpperCase()}</span></td>
+            <td>${item.Especialidades_Extraidas || '-'}</td>
+        </tr>
+    `).join('');
+    
+    tbody.innerHTML = html;
+    
+    // Salva no cache (máximo 10 páginas)
+    if (pageCache.size > 10) {
+        const firstKey = pageCache.keys().next().value;
+        pageCache.delete(firstKey);
+    }
+    pageCache.set(pageKey, html);
+    
+    // Aplica visibilidade das colunas
+    applyColumnVisibility();
+}
 
-        pageData.forEach(row => {
-            const tr = document.createElement('div');
-            tr.className = 'table-row';
-
-            columns.filter(c => c.visible).forEach(col => {
-                const td = document.createElement('div');
-                td.className = 'table-cell';
-                td.style.width = col.width;
-                let value = row[col.id];
-
-                if (col.id === 'Conta_Insta') {
-                    td.innerHTML = `<a href="https://instagram.com/${value}" target="_blank" class="cell-link">@${value}</a>`;
-                } else if (col.id === 'Telefone') {
-                    if (value && value !== '0') {
-                        const formatted = formatPhone(value);
-                        if (formatted) {
-                            const phoneNumber = formatted.replace(/\D/g, '');
-                            td.innerHTML = `<a href="https://wa.me/55${phoneNumber}" target="_blank" class="cell-link">${formatted}</a>`;
-                        }
-                    }
-                } else if (col.id === 'Telefones_Bio') {
-                    if (value && value !== '0' && value !== '') {
-                        const formatted = formatMultiplePhones(value);
-                        if (formatted) {
-                            td.textContent = formatted;
-                        }
-                    }
-                } else if (col.id === 'Especialidades') {
-                    if (value && value !== '') {
-                        const specs = value.split(',').map(s => s.trim());
-                        td.innerHTML = specs.map(s => `<span class="specialty-badge">${s}</span>`).join(' ');
-                    }
-                } else if (col.id === 'Tem_WhatsApp') {
-                    if (value === 'Sim') {
-                        td.innerHTML = '<span class="whatsapp-badge">✓ WhatsApp</span>';
-                    }
-                } else if (col.id === 'Bio') {
-                    const bioId = `bio-${row.ID_Insta}`;
-                    if (value && value.length > 100) {
-                        td.innerHTML = `<div class="bio-cell collapsed" id="${bioId}">${value}</div><span class="bio-toggle" onclick="toggleBio('${bioId}')">ver mais</span>`;
-                    } else {
-                        td.textContent = value || '';
-                    }
-                } else if (col.id === 'Link-Bio') {
-                    if (value && value !== '0') {
-                        const url = value.startsWith('http') ? value : `https://${value}`;
-                        td.innerHTML = `<a href="${url}" target="_blank" class="cell-link">🔗</a>`;
-                    }
-                } else if (col.id === 'e-mail' || col.id === 'Email_Bio') {
-                    if (value && value !== '0' && value !== '') {
-                        td.innerHTML = `<a href="mailto:${value}" class="cell-link">${value}</a>`;
-                    }
-                } else {
-                    td.textContent = value && value !== '0' ? value : '';
-                }
-
-                tr.appendChild(td);
-            });
-            tbody.appendChild(tr);
+// Aplica visibilidade das colunas após renderização
+function applyColumnVisibility() {
+    document.querySelectorAll('.column-toggle').forEach(checkbox => {
+        const columnIndex = checkbox.dataset.column;
+        const isVisible = checkbox.checked;
+        
+        document.querySelectorAll(`th`)[columnIndex]?.classList.toggle('column-hidden', !isVisible);
+        document.querySelectorAll(`tbody tr`).forEach(row => {
+            const cell = row.cells[columnIndex];
+            if (cell) cell.classList.toggle('column-hidden', !isVisible);
         });
-    }
-
-    updatePagination();
+    });
 }
 
-function toggleBio(bioId) {
-    const bioCell = document.getElementById(bioId);
-    const toggle = bioCell.nextElementSibling;
-
-    if (bioCell.classList.contains('collapsed')) {
-        bioCell.classList.remove('collapsed');
-        toggle.textContent = 'ver menos';
-    } else {
-        bioCell.classList.add('collapsed');
-        toggle.textContent = 'ver mais';
+// Sistema de filtros avançados
+function initializeFilters() {
+    // Popula selects de Local e Idioma
+    const locais = [...new Set(originalData.map(i => i.Local).filter(Boolean))].sort();
+    const idiomas = [...new Set(originalData.map(i => i.Idioma).filter(Boolean))].sort();
+    
+    const localSelect = document.querySelector('select[data-column="Local"]');
+    const idiomaSelect = document.querySelector('select[data-column="Idioma"]');
+    
+    if (localSelect) {
+        localSelect.innerHTML = '<option value="">Todos os locais</option>' + 
+            locais.map(l => `<option value="${l}">${l}</option>`).join('');
+    }
+    
+    if (idiomaSelect) {
+        // CORREÇÃO AQUI: Adicionado String(i) antes do toUpperCase()
+        idiomaSelect.innerHTML = '<option value="">Todos os idiomas</option>' + 
+            idiomas.map(i => `<option value="${i}">${String(i).toUpperCase()}</option>`).join('');
     }
 }
 
-function sortTable(columnId) {
-    if (sortColumn === columnId) {
-        sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
-    } else {
-        sortColumn = columnId;
-        sortDirection = 'asc';
+// Aplicar todos os filtros
+function applyFilters() {
+    pageCache.clear(); // Limpa cache ao filtrar
+    
+    filteredData = originalData.filter(item => {
+        // Filtro de busca global
+        if (searchTerm) {
+            const matches = Object.values(item).some(value => 
+                String(value).toLowerCase().includes(searchTerm.toLowerCase())
+            );
+            if (!matches) return false;
+        }
+        
+        // Filtros por coluna
+        for (const [column, filter] of Object.entries(columnFilters)) {
+            if (!filter || filter === '') continue;
+            
+            const value = item[column];
+            
+            // Filtros especiais para telefone e email
+            if (column === 'Telefone' || column === 'e-mail') {
+                if (filter === 'has' && (!value || value === '-')) return false;
+                if (filter === 'empty' && value && value !== '-') return false;
+            } 
+            // Filtros de múltipla seleção
+            else if (Array.isArray(filter)) {
+                if (filter.length > 0 && !filter.includes(value)) return false;
+            }
+            // Filtros de texto
+            else {
+                if (!String(value).toLowerCase().includes(filter.toLowerCase())) return false;
+            }
+        }
+        
+        return true;
+    });
+    
+    // Aplica ordenação se houver
+    if (currentSort.column) {
+        sortData();
     }
+    
+    currentPage = 1;
+    renderTable(filteredData);
+    updateStats();
+    updatePaginationControls();
+    updateFilterIndicators();
+}
 
+// Indicadores visuais de filtros ativos
+function updateFilterIndicators() {
+    const hasFilters = Object.values(columnFilters).some(f => f && f !== '' && (!Array.isArray(f) || f.length > 0));
+    const clearButton = document.getElementById('clearFilters');
+    
+    if (clearButton) {
+        clearButton.style.display = hasFilters || searchTerm ? 'block' : 'none';
+    }
+    
+    // Atualiza indicadores nas colunas
+    document.querySelectorAll('.filter-indicator').forEach(indicator => {
+        const column = indicator.dataset.column;
+        const hasFilter = columnFilters[column] && columnFilters[column] !== '' && 
+                         (!Array.isArray(columnFilters[column]) || columnFilters[column].length > 0);
+        indicator.style.display = hasFilter ? 'inline' : 'none';
+    });
+}
+
+// Ordenação otimizada
+function sortData() {
     filteredData.sort((a, b) => {
-        let aVal = a[columnId] || '';
-        let bVal = b[columnId] || '';
+        let valA = a[currentSort.column] || '';
+        let valB = b[currentSort.column] || '';
+        
+        if (typeof valA === 'string') valA = valA.toLowerCase();
+        if (typeof valB === 'string') valB = valB.toLowerCase();
 
-        if (typeof aVal === 'string') aVal = aVal.toLowerCase();
-        if (typeof bVal === 'string') bVal = bVal.toLowerCase();
-
-        if (aVal < bVal) return sortDirection === 'asc' ? -1 : 1;
-        if (aVal > bVal) return sortDirection === 'asc' ? 1 : -1;
+        if (valA < valB) return currentSort.ascending ? -1 : 1;
+        if (valA > valB) return currentSort.ascending ? 1 : -1;
         return 0;
     });
-
-    updateTableHeader();
-    renderTable();
 }
 
-function applyFilters() {
-    const globalSearch = document.getElementById('globalSearch').value.toLowerCase();
-    const searchNome = document.getElementById('searchNome').value.toLowerCase();
-    const searchConta = document.getElementById('searchConta').value.toLowerCase();
-    const searchEspecialidade = document.getElementById('searchEspecialidade').value.toLowerCase();
-    const searchCidade = document.getElementById('searchCidade').value.toLowerCase();
-    const filterWhatsApp = document.getElementById('filterWhatsApp').value;
-
-    filteredData = allData.filter(row => {
-        const matchGlobal = !globalSearch || Object.values(row).some(val =>
-            String(val).toLowerCase().includes(globalSearch)
-        );
-        const matchNome = !searchNome || (row.Nome && row.Nome.toLowerCase().includes(searchNome));
-        const matchConta = !searchConta || (row.Conta_Insta && row.Conta_Insta.toLowerCase().includes(searchConta));
-        const matchEspecialidade = !searchEspecialidade || (row.Especialidades && row.Especialidades.toLowerCase().includes(searchEspecialidade));
-        const matchCidade = !searchCidade || (row.Cidade_Estado && row.Cidade_Estado.toLowerCase().includes(searchCidade));
-
-        let matchWhatsApp = true;
-        if (filterWhatsApp === 'sim') {
-            matchWhatsApp = row.Tem_WhatsApp === 'Sim';
-        } else if (filterWhatsApp === 'nao') {
-            matchWhatsApp = row.Tem_WhatsApp !== 'Sim';
-        }
-
-        // Filtros por estatísticas (clicáveis)
-        let matchStatFilters = true;
-
-        if (activeStatFilters.specialty) {
-            matchStatFilters = matchStatFilters && (row.Especialidades && row.Especialidades !== '');
-        }
-
-        if (activeStatFilters.location) {
-            matchStatFilters = matchStatFilters && (row.Cidade_Estado && row.Cidade_Estado !== '');
-        }
-
-        if (activeStatFilters.whatsapp) {
-            matchStatFilters = matchStatFilters && (row.Tem_WhatsApp === 'Sim');
-        }
-
-        if (activeStatFilters.email) {
-            matchStatFilters = matchStatFilters && ((row['e-mail'] && row['e-mail'] !== '0') || (row.Email_Bio && row.Email_Bio !== ''));
-        }
-
-        return matchGlobal && matchNome && matchConta && matchEspecialidade && matchCidade && matchWhatsApp && matchStatFilters;
-    });
-
-    currentPage = 1;
-    updateStats();
-    renderTable();
-}
-
-function clearFilters() {
-    document.getElementById('globalSearch').value = '';
-    document.getElementById('searchNome').value = '';
-    document.getElementById('searchConta').value = '';
-    document.getElementById('searchEspecialidade').value = '';
-    document.getElementById('searchCidade').value = '';
-    document.getElementById('filterWhatsApp').value = '';
-
-    // Limpa filtros de estatísticas
-    activeStatFilters = {
-        specialty: false,
-        location: false,
-        whatsapp: false,
-        email: false
-    };
-
-    // Remove classe active dos cards
-    document.getElementById('statSpecialty').classList.remove('active');
-    document.getElementById('statLocation').classList.remove('active');
-    document.getElementById('statWhatsApp').classList.remove('active');
-    document.getElementById('statEmail').classList.remove('active');
-
-    applyFilters();
-}
-
+// Estatísticas
 function updateStats() {
-    document.getElementById('totalLeads').textContent = allData.length;
-    document.getElementById('filteredLeads').textContent = filteredData.length;
-    document.getElementById('withSpecialty').textContent = filteredData.filter(r => r.Especialidades && r.Especialidades !== '').length;
-    document.getElementById('withLocation').textContent = filteredData.filter(r => r.Cidade_Estado && r.Cidade_Estado !== '').length;
-    document.getElementById('withWhatsApp').textContent = filteredData.filter(r => r.Tem_WhatsApp === 'Sim').length;
-    document.getElementById('withEmail').textContent = filteredData.filter(r => (r['e-mail'] && r['e-mail'] !== '0') || (r.Email_Bio && r.Email_Bio !== '')).length;
+    const statsElement = document.getElementById('stats');
+    if (!statsElement) return;
+    
+    const total = originalData.length;
+    const showing = filteredData.length;
+    const comTelefone = filteredData.filter(i => i.Telefone && i.Telefone !== '-').length;
+    const comEmail = filteredData.filter(i => i['e-mail'] && i['e-mail'] !== '-').length;
+    
+    statsElement.innerHTML = 
+        `📈 Total: <strong>${total.toLocaleString('pt-BR')}</strong> registros | 
+         👁️ Exibindo: <strong>${showing.toLocaleString('pt-BR')}</strong> | 
+         📞 Com telefone: <strong>${comTelefone.toLocaleString('pt-BR')}</strong> | 
+         📧 Com e-mail: <strong>${comEmail.toLocaleString('pt-BR')}</strong>`;
 }
 
-function updatePagination() {
+// Controles de paginação
+function updatePaginationControls() {
     const totalPages = Math.ceil(filteredData.length / pageSize);
-    document.getElementById('currentPage').textContent = currentPage;
-    document.getElementById('totalPages').textContent = totalPages;
-    document.getElementById('prevBtn').disabled = currentPage === 1;
-    document.getElementById('nextBtn').disabled = currentPage === totalPages;
-}
-
-function previousPage() {
-    if (currentPage > 1) {
-        currentPage--;
-        renderTable();
-        window.scrollTo({ top: 0, behavior: 'smooth' });
+    const startItem = Math.min((currentPage - 1) * pageSize + 1, filteredData.length);
+    const endItem = Math.min(currentPage * pageSize, filteredData.length);
+    
+    const pageInfo = document.getElementById('pageInfo');
+    if (pageInfo) {
+        pageInfo.textContent = 
+            `Mostrando ${startItem.toLocaleString('pt-BR')}-${endItem.toLocaleString('pt-BR')} de ${filteredData.length.toLocaleString('pt-BR')}`;
     }
+    
+    const totalPagesElem = document.getElementById('totalPages');
+    if (totalPagesElem) {
+        totalPagesElem.textContent = `/ ${totalPages}`;
+    }
+    
+    const pageInput = document.getElementById('pageInput');
+    if (pageInput) {
+        pageInput.value = currentPage;
+        pageInput.max = totalPages;
+    }
+    
+    const firstPage = document.getElementById('firstPage');
+    const prevPage = document.getElementById('prevPage');
+    const nextPage = document.getElementById('nextPage');
+    const lastPage = document.getElementById('lastPage');
+    
+    if (firstPage) firstPage.disabled = currentPage === 1;
+    if (prevPage) prevPage.disabled = currentPage === 1;
+    if (nextPage) nextPage.disabled = currentPage === totalPages || totalPages === 0;
+    if (lastPage) lastPage.disabled = currentPage === totalPages || totalPages === 0;
 }
 
-function nextPage() {
+function goToPage(page) {
     const totalPages = Math.ceil(filteredData.length / pageSize);
+    currentPage = Math.max(1, Math.min(page, totalPages));
+    renderTable(filteredData);
+    updatePaginationControls();
+    
+    // Pré-carrega próxima página
     if (currentPage < totalPages) {
-        currentPage++;
-        renderTable();
-        window.scrollTo({ top: 0, behavior: 'smooth' });
+        setTimeout(() => preloadPage(currentPage + 1), 100);
     }
 }
 
-function changePageSize() {
-    pageSize = parseInt(document.getElementById('pageSize').value);
-    currentPage = 1;
-    renderTable();
+// Pré-carregamento de páginas
+function preloadPage(page) {
+    const startIndex = (page - 1) * pageSize;
+    const endIndex = startIndex + pageSize;
+    const pageKey = `${page}-${pageSize}-${filteredData.length}`;
+    
+    if (!pageCache.has(pageKey)) {
+        const paginatedData = filteredData.slice(startIndex, endIndex);
+        const html = paginatedData.map(item => `
+            <tr>
+                <td>${item.ID_Insta || '-'}</td>
+                <td><strong>@${item.Conta_Insta || '-'}</strong></td>
+                <td>${item.Nome || '-'}</td>
+                <td style="max-width: 300px;">${item.Bio || '-'}</td>
+                <td class="phone">${item.Telefone || '-'}</td>
+                <td class="email">${item['e-mail'] || '-'}</td>
+                <td class="link" style="max-width: 150px;">${item['Link-Bio'] || '-'}</td>
+                <td>${item.Local || '-'}</td>
+                <td><span class="badge">${String(item.Idioma || '-').toUpperCase()}</span></td>
+                <td>${item.Especialidades_Extraidas || '-'}</td>
+            </tr>
+        `).join('');
+        
+        pageCache.set(pageKey, html);
+    }
 }
 
+// Exportação Excel
+function exportToExcel() {
+    const exportOption = document.getElementById('exportOptions').value;
+    let dataToExport = [];
+    let filename = 'dentistas_instagram';
+    
+    // Define dados a exportar
+    if (exportOption === 'all') {
+        dataToExport = originalData;
+        filename += '_completo';
+    } else if (exportOption === 'filtered') {
+        dataToExport = filteredData;
+        filename += '_filtrado';
+    } else {
+        dataToExport = getVisibleColumnsData(filteredData);
+        filename += '_visivel';
+    }
+    
+    if (dataToExport.length === 0) {
+        alert('Não há dados para exportar');
+        return;
+    }
+    
+    showLoading(true, `Preparando exportação de ${dataToExport.length.toLocaleString('pt-BR')} registros...`);
+    
+    // Cria workbook
+    setTimeout(() => {
+        const ws = XLSX.utils.json_to_sheet(dataToExport);
+        
+        // Ajusta larguras das colunas
+        const colWidths = [
+            { wch: 15 }, // ID
+            { wch: 20 }, // Conta
+            { wch: 30 }, // Nome
+            { wch: 50 }, // Bio
+            { wch: 15 }, // Telefone
+            { wch: 25 }, // Email
+            { wch: 30 }, // Link
+            { wch: 20 }, // Local
+            { wch: 10 }, // Idioma
+            { wch: 40 }  // Especialidades
+        ];
+        ws['!cols'] = colWidths;
+        
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Dados");
+        
+        // Adiciona data/hora ao nome do arquivo
+        const date = new Date().toISOString().slice(0, 10);
+        filename += `_${date}.xlsx`;
+        
+        XLSX.writeFile(wb, filename);
+        showLoading(false);
+    }, 100);
+}
+
+// Exportação CSV
 function exportToCSV() {
-    const headers = columns.map(c => c.label);
-    const columnIds = columns.map(c => c.id);
+    const exportOption = document.getElementById('exportOptions').value;
+    let dataToExport = [];
+    let filename = 'dentistas_instagram';
+    
+    // Define dados a exportar
+    if (exportOption === 'all') {
+        dataToExport = originalData;
+        filename += '_completo';
+    } else if (exportOption === 'filtered') {
+        dataToExport = filteredData;
+        filename += '_filtrado';
+    } else {
+        dataToExport = getVisibleColumnsData(filteredData);
+        filename += '_visivel';
+    }
+    
+    if (dataToExport.length === 0) {
+        alert('Não há dados para exportar');
+        return;
+    }
+    
+    showLoading(true, `Preparando CSV de ${dataToExport.length.toLocaleString('pt-BR')} registros...`);
+    
+    setTimeout(() => {
+        // Converte para CSV
+        const ws = XLSX.utils.json_to_sheet(dataToExport);
+        const csv = XLSX.utils.sheet_to_csv(ws, { FS: ';' }); // Usa ; como separador para melhor compatibilidade
+        
+        // Cria blob e download
+        const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' }); // BOM para UTF-8
+        const link = document.createElement("a");
+        const url = URL.createObjectURL(blob);
+        
+        const date = new Date().toISOString().slice(0, 10);
+        filename += `_${date}.csv`;
+        
+        link.setAttribute("href", url);
+        link.setAttribute("download", filename);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        showLoading(false);
+    }, 100);
+}
 
-    let csv = headers.join(',') + '\n';
-
-    filteredData.forEach(row => {
-        const values = columnIds.map(id => {
-            let value = row[id] || '';
-            value = String(value).replace(/"/g, '""');
-            if (value.includes(',') || value.includes('\n') || value.includes('"')) {
-                value = `"${value}"`;
-            }
-            return value;
+// Obtém dados apenas das colunas visíveis
+function getVisibleColumnsData(data) {
+    const visibleColumns = [];
+    const columnMap = {
+        0: 'ID_Insta',
+        1: 'Conta_Insta',
+        2: 'Nome',
+        3: 'Bio',
+        4: 'Telefone',
+        5: 'e-mail',
+        6: 'Link-Bio',
+        7: 'Local',
+        8: 'Idioma',
+        9: 'Especialidades_Extraidas'
+    };
+    
+    document.querySelectorAll('.column-toggle:checked').forEach(checkbox => {
+        const columnIndex = checkbox.dataset.column;
+        visibleColumns.push(columnMap[columnIndex]);
+    });
+    
+    return data.map(item => {
+        const newItem = {};
+        visibleColumns.forEach(col => {
+            newItem[col] = item[col];
         });
-        csv += values.join(',') + '\n';
+        return newItem;
     });
-
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    const url = URL.createObjectURL(blob);
-    link.setAttribute('href', url);
-    link.setAttribute('download', `leads_odonto_${new Date().toISOString().split('T')[0]}.csv`);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
 }
 
-// Função para Marcar/Desmarcar todas
-function toggleAllColumns(shouldShow) {
-    // 1. Atualiza o estado lógico do array de colunas
-    columns.forEach(col => {
-        col.visible = shouldShow;
+// Event Listeners
+document.addEventListener('DOMContentLoaded', () => {
+    // Busca global com debounce
+    const searchInput = document.getElementById('searchInput');
+    if (searchInput) {
+        const debouncedSearch = debounce(() => {
+            searchTerm = searchInput.value;
+            applyFilters();
+        }, 300);
+        searchInput.addEventListener('input', debouncedSearch);
+    }
+    
+    // Toggle de filtros
+    const toggleFiltersBtn = document.getElementById('toggleFilters');
+    if (toggleFiltersBtn) {
+        toggleFiltersBtn.addEventListener('click', () => {
+            const filterRow = document.getElementById('filterRow');
+            if (filterRow) {
+                const isVisible = filterRow.style.display === 'flex';
+                filterRow.style.display = isVisible ? 'none' : 'flex';
+                toggleFiltersBtn.textContent = isVisible ? '🔽 Filtros' : '🔼 Filtros';
+            }
+        });
+    }
+    
+    // Limpar filtros
+    const clearFiltersBtn = document.getElementById('clearFilters');
+    if (clearFiltersBtn) {
+        clearFiltersBtn.addEventListener('click', () => {
+            columnFilters = {};
+            searchTerm = '';
+            if (searchInput) searchInput.value = '';
+            
+            // Limpa inputs de filtro
+            document.querySelectorAll('.filter-input').forEach(input => input.value = '');
+            document.querySelectorAll('.filter-select').forEach(select => {
+                if (select.multiple) {
+                    Array.from(select.options).forEach(option => option.selected = false);
+                } else {
+                    select.value = '';
+                }
+            });
+            
+            applyFilters();
+        });
+    }
+    
+    // Filtros por coluna com debounce
+    const debouncedColumnFilter = debounce((column, value) => {
+        if (value === '') {
+            delete columnFilters[column];
+        } else {
+            columnFilters[column] = value;
+        }
+        applyFilters();
+    }, 300);
+    
+    // Event listeners para filtros de texto
+    document.querySelectorAll('.filter-input').forEach(input => {
+        input.addEventListener('input', (e) => {
+            debouncedColumnFilter(e.target.dataset.column, e.target.value);
+        });
     });
-
-    // 2. Atualiza visualmente os checkboxes HTML
-    const checkboxes = document.querySelectorAll('#columnCheckboxes input[type="checkbox"]');
-    checkboxes.forEach(box => {
-        box.checked = shouldShow;
+    
+    // Event listeners para filtros select
+    document.querySelectorAll('.filter-select').forEach(select => {
+        select.addEventListener('change', (e) => {
+            const column = e.target.dataset.column;
+            let value = e.target.value;
+            
+            // Para select múltiplo
+            if (e.target.multiple) {
+                value = Array.from(e.target.selectedOptions).map(o => o.value).filter(v => v !== '');
+            }
+            
+            debouncedColumnFilter(column, value);
+        });
     });
-
-    // 3. Renderiza a tabela novamente com o novo estado
-    updateTableHeader();
-    renderTable();
-}
+    
+    // Ordenação
+    document.querySelectorAll('th.sortable').forEach(th => {
+        th.addEventListener('click', () => {
+            const column = th.dataset.column;
+            
+            if (currentSort.column === column) {
+                currentSort.ascending = !currentSort.ascending;
+            } else {
+                currentSort.column = column;
+                currentSort.ascending = true;
+            }
+            
+            pageCache.clear(); // Limpa cache ao ordenar
+            sortData();
+            renderTable(filteredData);
+            
+            // Atualiza indicador visual
+            document.querySelectorAll('th.sortable').forEach(h => {
+                h.classList.remove('sorted-asc', 'sorted-desc');
+            });
+            th.classList.add(currentSort.ascending ? 'sorted-asc' : 'sorted-desc');
+        });
+    });
+    
+    // Paginação
+    const firstPageBtn = document.getElementById('firstPage');
+    const prevPageBtn = document.getElementById('prevPage');
+    const nextPageBtn = document.getElementById('nextPage');
+    const lastPageBtn = document.getElementById('lastPage');
+    const pageInputElem = document.getElementById('pageInput');
+    const pageSizeSelectElem = document.getElementById('pageSizeSelect');
+    
+    if (firstPageBtn) {
+        firstPageBtn.addEventListener('click', () => goToPage(1));
+    }
+    if (prevPageBtn) {
+        prevPageBtn.addEventListener('click', () => goToPage(currentPage - 1));
+    }
+    if (nextPageBtn) {
+        nextPageBtn.addEventListener('click', () => goToPage(currentPage + 1));
+    }
+    if (lastPageBtn) {
+        lastPageBtn.addEventListener('click', () => {
+            const totalPages = Math.ceil(filteredData.length / pageSize);
+            goToPage(totalPages);
+        });
+    }
+    
+    // Input direto de página
+    if (pageInputElem) {
+        pageInputElem.addEventListener('change', (e) => {
+            goToPage(parseInt(e.target.value) || 1);
+        });
+    }
+    
+    // Mudança de tamanho de página
+    if (pageSizeSelectElem) {
+        pageSizeSelectElem.addEventListener('change', (e) => {
+            pageSize = parseInt(e.target.value);
+            pageCache.clear(); // Limpa cache ao mudar tamanho
+            currentPage = 1;
+            renderTable(filteredData);
+            updatePaginationControls();
+        });
+    }
+    
+    // Menu de colunas
+    const columnMenu = document.getElementById('columnMenu');
+    const toggleButton = document.getElementById('toggleColumns');
+    
+    if (toggleButton && columnMenu) {
+        toggleButton.addEventListener('click', (e) => {
+            e.stopPropagation();
+            columnMenu.style.display = columnMenu.style.display === 'none' ? 'block' : 'none';
+        });
+        
+        // Fechar menu ao clicar fora
+        document.addEventListener('click', (e) => {
+            if (!columnMenu.contains(e.target) && e.target !== toggleButton) {
+                columnMenu.style.display = 'none';
+            }
+        });
+    }
+    
+    // Toggle de colunas
+    document.querySelectorAll('.column-toggle').forEach(checkbox => {
+        checkbox.addEventListener('change', () => {
+            applyColumnVisibility();
+        });
+    });
+    
+    // Exportação
+    const exportExcelBtn = document.getElementById('exportExcel');
+    const exportCSVBtn = document.getElementById('exportCSV');
+    
+    if (exportExcelBtn) {
+        exportExcelBtn.addEventListener('click', exportToExcel);
+    }
+    if (exportCSVBtn) {
+        exportCSVBtn.addEventListener('click', exportToCSV);
+    }
+    
+    // Inicializa - Carrega dados após todos os event listeners estarem configurados
+    loadData();
+});
